@@ -364,6 +364,7 @@ app.get('/getMetadataAndCaptions', async (req, res) => {
             author: info.videoDetails.author?.name || 'Unknown author',
             uploadDate: info.videoDetails.uploadDate || info.videoDetails.publishDate || 'Unknown date',
             views: info.videoDetails.viewCount || '0',
+            duration: info.videoDetails.lengthSeconds ? `${Math.floor(info.videoDetails.lengthSeconds / 60)}:${(info.videoDetails.lengthSeconds % 60).toString().padStart(2, '0')}` : 'Unknown duration',
         };
 
         const captions = info.player_response.captions?.playerCaptionsTracklistRenderer?.captionTracks?.find(
@@ -402,13 +403,14 @@ ${metadata.description}
 **Author:** ${metadata.author}  
 **Upload Date:** ${metadata.uploadDate}  
 **Views:** ${metadata.views}
+**Duration:** ${metadata.duration}
 
 ---
 
 ## Captions:
 
 ${captionsText}`);
-        } else if (format === 'html') {
+        } else if (!format || format === 'html') {
             res.send(`
 <!DOCTYPE html>
 <html>
@@ -463,6 +465,7 @@ ${captionsText}`);
         <p><strong>Author:</strong> ${metadata.author}</p>
         <p><strong>Upload Date:</strong> ${metadata.uploadDate}</p>
         <p><strong>Views:</strong> ${metadata.views}</p>
+        <p><strong>Duration:</strong> ${metadata.duration}</p>
     </div>
 
     <div class="captions">
