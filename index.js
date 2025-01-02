@@ -229,8 +229,8 @@ app.get('/', (req, res) => {
             <div class="input-group">
                 <label for="youtubeUrl">YouTube URL:</label>
                 <div class="input-wrapper">
-                    <button class="paste-button" id="pasteButton">📋 Paste</button>
-                    <input type="text" id="youtubeUrl" placeholder="e.g., https://www.youtube.com/watch?v=dQw4w9WgXcQ">
+                    <button class="paste-button" id="pasteButton" title="Paste (Ctrl+V)">📋 Paste</button>
+                    <input type="text" id="youtubeUrl" placeholder="e.g., https://www.youtube.com/watch?v=dQw4w9WgXcQ" autofocus>
                     <button class="clear-button" id="clearButton">×</button>
                 </div>
             </div>
@@ -301,6 +301,21 @@ app.get('/', (req, res) => {
                     }
                 }
 
+                // Paste handling
+                async function pasteFromClipboard() {
+                    try {
+                        const text = await navigator.clipboard.readText();
+                        const urlInput = document.getElementById('youtubeUrl');
+                        urlInput.value = text;
+                        updateLinks();
+                        // Focus and select the input after pasting
+                        urlInput.focus();
+                        urlInput.select();
+                    } catch (err) {
+                        console.error('Failed to read clipboard:', err);
+                    }
+                }
+
                 // Input event listeners
                 const urlInput = document.getElementById('youtubeUrl');
                 urlInput.addEventListener('input', updateLinks);
@@ -309,16 +324,21 @@ app.get('/', (req, res) => {
                 document.getElementById('clearButton').addEventListener('click', () => {
                     urlInput.value = '';
                     updateLinks();
+                    urlInput.focus();
                 });
                 
                 // Paste button
-                document.getElementById('pasteButton').addEventListener('click', async () => {
-                    try {
-                        const text = await navigator.clipboard.readText();
-                        urlInput.value = text;
-                        updateLinks();
-                    } catch (err) {
-                        console.error('Failed to read clipboard:', err);
+                document.getElementById('pasteButton').addEventListener('click', pasteFromClipboard);
+
+                // Global keyboard shortcut for paste
+                document.addEventListener('keydown', (e) => {
+                    // Check if Ctrl+V or Cmd+V is pressed
+                    if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+                        // Only handle if we're not in an input field (browser will handle those)
+                        if (document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
+                            e.preventDefault();
+                            pasteFromClipboard();
+                        }
                     }
                 });
 
@@ -333,6 +353,11 @@ app.get('/', (req, res) => {
                         console.error('Failed to copy text: ', err);
                     });
                 }
+
+                // Focus input field on page load
+                document.addEventListener('DOMContentLoaded', () => {
+                    document.getElementById('youtubeUrl').focus();
+                });
             </script>
         </body>
         </html>
