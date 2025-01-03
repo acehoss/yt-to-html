@@ -423,7 +423,7 @@ app.get('/getMetadataAndCaptions', async (req, res) => {
             res.send(`# ${metadata.title}
 
 **Description:**  
-${metadata.description}
+${metadata.description.replace(/<br>/g, '\n')}
 
 **Author:** ${metadata.author}  
 **Upload Date:** ${metadata.uploadDate}  
