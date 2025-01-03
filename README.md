@@ -1,8 +1,8 @@
 # YouTube Metadata and Captions Extractor
 
-A simple web service that extracts metadata and captions from YouTube videos, with support for multiple output formats.
+A simple web service that extracts metadata and captions from YouTube videos, with support for multiple output formats. Serves an index page with a form to input a YouTube URL.
 
-This tool was created to allow ChatGPT to "see" YouTube videos. ChatGPT's web tool can't access YouTube videos directly. Also note that ChatGPT's web tool can only access pages with a `text/html` content type, so be sure to use the HTML format output for ChatGPT.
+This tool was created to allow ChatGPT to "see" YouTube videos. ChatGPT's web tool can't access YouTube videos directly. Also note that ChatGPT's web tool can only access pages with a `text/html` content type, so if you're planning to ask ChatGPT to browse to the URL, use HTML. Alternatively, you can grab the markdown and paste it into ChatGPT. This is sometimes more reliable.
 
 You would, of course, need to deploy this service to a server that can be accessed by ChatGPT.
 
@@ -61,7 +61,7 @@ The service will be available at `http://localhost:3001`
 1. Open the web interface in your browser
 2. Paste a YouTube URL (supports various formats)
 3. Get instant access to three format options:
-   - HTML: Beautifully styled presentation (default)
+   - HTML: Slightly styled presentation (default)
    - Markdown: Great for documentation
    - JSON: Perfect for API integration
 
