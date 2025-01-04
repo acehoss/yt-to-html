@@ -7,6 +7,14 @@ import xml2js from 'xml2js';
 const app = express();
 const port = 3001;
 
+// Enable CORS for all routes
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    next();
+});
+
 // Serve the frontend page
 app.get('/', (req, res) => {
     res.send(`
@@ -200,6 +208,22 @@ app.get('/', (req, res) => {
                 .copy-button:hover {
                     background: #218838;
                 }
+                .fetch-button {
+                    padding: 4px 8px;
+                    font-size: 14px;
+                    background: #17a2b8;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    cursor: pointer;
+                }
+                .fetch-button:hover {
+                    background: #138496;
+                }
+                .fetch-button:disabled {
+                    background: #6c757d;
+                    cursor: not-allowed;
+                }
                 .copy-feedback {
                     color: #28a745;
                     font-size: 14px;
@@ -217,6 +241,54 @@ app.get('/', (req, res) => {
                     border: 1px solid var(--error-color);
                     border-radius: 4px;
                 }
+                
+                /* Modal styles */
+                .modal {
+                    display: none;
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background: rgba(0, 0, 0, 0.7);
+                    z-index: 1000;
+                }
+                .modal.visible {
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+                .modal-content {
+                    background: var(--card-bg);
+                    color: var(--text-color);
+                    padding: 20px;
+                    border-radius: 8px;
+                    max-width: 90%;
+                    max-height: 90vh;
+                    overflow-y: auto;
+                    position: relative;
+                }
+                .modal-button {
+                    position: absolute;
+                    top: 10px;
+                    right: 10px;
+                    padding: 4px 12px;
+                    background: #28a745;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    font-size: 14px;
+                    transition: background-color 0.2s;
+                }
+                .modal-button:hover {
+                    background: #218838;
+                }
+                .modal pre {
+                    white-space: pre-wrap;
+                    word-wrap: break-word;
+                    margin-top: 30px;
+                }
             </style>
         </head>
         <body>
@@ -225,6 +297,15 @@ app.get('/', (req, res) => {
                 <button class="theme-button" data-theme="dark" title="Dark Theme">🌙</button>
                 <button class="theme-button" data-theme="system" title="System Theme">💻</button>
             </div>
+            
+            <!-- Add modal dialog -->
+            <div class="modal" id="contentModal">
+                <div class="modal-content">
+                    <button class="modal-button" onclick="copyAndClose()">Copy & Close</button>
+                    <pre id="modalContent"></pre>
+                </div>
+            </div>
+
             <h1>YouTube Metadata and Captions Extractor</h1>
             <div class="input-group">
                 <label for="youtubeUrl">YouTube URL:</label>
@@ -289,6 +370,7 @@ app.get('/', (req, res) => {
                                     <div class="format-actions">
                                         <a href="\${link}" target="_blank">View</a>
                                         <button class="copy-button" onclick="copyToClipboard('\${link}', this)">Copy URL</button>
+                                        <button class="fetch-button" onclick="fetchAndCopy('\${link}', this)">Fetch & Copy</button>
                                         <span class="copy-feedback">Copied!</span>
                                     </div>
                                 </div>
@@ -342,17 +424,99 @@ app.get('/', (req, res) => {
                     }
                 });
 
-                function copyToClipboard(text, button) {
-                    navigator.clipboard.writeText(text).then(() => {
-                        const feedback = button.nextElementSibling;
-                        feedback.classList.add('visible');
-                        setTimeout(() => {
-                            feedback.classList.remove('visible');
-                        }, 2000);
-                    }).catch(err => {
+                async function copyToClipboard(text, button) {
+                    try {
+                        await navigator.clipboard.writeText(text);
+                        showCopyFeedback(button);
+                    } catch (err) {
                         console.error('Failed to copy text: ', err);
-                    });
+                    }
                 }
+
+                async function fetchAndCopy(url, button) {
+                    try {
+                        // Disable the button and show loading state
+                        button.disabled = true;
+                        button.textContent = 'Fetching...';
+                        
+                        // Fetch the content
+                        const response = await fetch(url);
+                        const content = await response.text();
+                        
+                        // Show content in modal
+                        const modalContent = document.getElementById('modalContent');
+                        modalContent.textContent = content;
+                        document.getElementById('contentModal').classList.add('visible');
+                        
+                        // Reset button
+                        button.disabled = false;
+                        button.textContent = 'Fetch & Copy';
+                    } catch (err) {
+                        console.error('Failed to fetch:', err);
+                        button.textContent = 'Error';
+                        setTimeout(() => {
+                            button.disabled = false;
+                            button.textContent = 'Fetch & Copy';
+                        }, 2000);
+                    }
+                }
+                
+                function showCopyFeedback(button) {
+                    const feedback = button.nextElementSibling;
+                    feedback.classList.add('visible');
+                    setTimeout(() => {
+                        feedback.classList.remove('visible');
+                    }, 2000);
+                }
+
+                function closeModal() {
+                    document.getElementById('contentModal').classList.remove('visible');
+                }
+
+                function copyAndClose() {
+                    const content = document.getElementById('modalContent').textContent;
+                    const textarea = document.createElement('textarea');
+                    textarea.value = content;
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    
+                    try {
+                        document.execCommand('copy');
+                        const copyButton = document.querySelector('.modal-button');
+                        copyButton.textContent = 'Copied!';
+                        
+                        // Close the modal after 500ms
+                        setTimeout(() => {
+                            closeModal();
+                            // Reset button text after modal is closed
+                            setTimeout(() => {
+                                copyButton.textContent = 'Copy';
+                            }, 100);
+                        }, 500);
+                    } catch (err) {
+                        console.error('Failed to copy:', err);
+                        copyButton.textContent = 'Error';
+                        setTimeout(() => {
+                            copyButton.textContent = 'Copy';
+                        }, 2000);
+                    } finally {
+                        document.body.removeChild(textarea);
+                    }
+                }
+
+                // Close modal when clicking outside
+                document.getElementById('contentModal').addEventListener('click', (e) => {
+                    if (e.target.id === 'contentModal') {
+                        closeModal();
+                    }
+                });
+
+                // Close modal with Escape key
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape') {
+                        closeModal();
+                    }
+                });
 
                 // Focus input field on page load
                 document.addEventListener('DOMContentLoaded', () => {
