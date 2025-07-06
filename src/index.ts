@@ -1,14 +1,11 @@
-"use strict";
+import express, { Request, Response, NextFunction } from 'express';
+import { Innertube } from 'youtubei.js';
 
-import express from 'express';
-import ytdl from '@distube/ytdl-core';
-import fetch from 'node-fetch';
-import xml2js from 'xml2js';
 const app = express();
 const port = 3001;
 
 // Enable CORS for all routes
-app.use((req, res, next) => {
+app.use((req: Request, res: Response, next: NextFunction) => {
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
@@ -16,7 +13,7 @@ app.use((req, res, next) => {
 });
 
 // Serve the frontend page
-app.get('/', (req, res) => {
+app.get('/', (req: Request, res: Response) => {
     res.send(`
         <!DOCTYPE html>
         <html lang="en">
@@ -528,58 +525,70 @@ app.get('/', (req, res) => {
     `);
 });
 
+// Helper function to format seconds to HH:MM:SS
+function formatTime(seconds: number): string {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = Math.floor(seconds % 60);
+    
+    if (hours > 0) {
+        return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+    return `${minutes}:${secs.toString().padStart(2, '0')}`;
+}
+
 // Service to get metadata and captions
-app.get('/getMetadataAndCaptions', async (req, res) => {
-    const videoId = req.query.videoId;
-    const format = req.query.format;
+app.get('/getMetadataAndCaptions', async (req: Request, res: Response): Promise<void> => {
+    const videoId = req.query.videoId as string;
+    const format = req.query.format as string;
 
     if (!videoId) {
-        return res.status(400).json({ error: 'Missing videoId parameter' });
+        res.status(400).json({ error: 'Missing videoId parameter' });
+        return;
     }
 
     try {
-        const videoURL = `https://www.youtube.com/watch?v=${videoId}`;
-        const info = await ytdl.getInfo(videoURL, {
-            requestOptions: {
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    'Accept-Language': 'en-US,en;q=0.9'
-                }
-            }
+        // Initialize YouTube.js client
+        const yt = await Innertube.create({ 
+            generate_session_locally: true 
         });
+
+        // Get video info
+        const info = await yt.getInfo(videoId);
+        
+        // Extract basic metadata
         const metadata = {
-            title: info.videoDetails.title || 'Untitled',
-            description: (info.videoDetails.description || info.videoDetails.shortDescription || 'No description available.').replace(/\n/g, '<br>'),
-            author: info.videoDetails.author?.name || 'Unknown author',
-            uploadDate: info.videoDetails.uploadDate || info.videoDetails.publishDate || 'Unknown date',
-            views: info.videoDetails.viewCount || '0',
-            duration: info.videoDetails.lengthSeconds ? `${Math.floor(info.videoDetails.lengthSeconds / 60)}:${(info.videoDetails.lengthSeconds % 60).toString().padStart(2, '0')}` : 'Unknown duration',
+            title: info.basic_info.title || 'Untitled',
+            description: info.basic_info.short_description || 'No description available.',
+            author: info.basic_info.author || 'Unknown author',
+            uploadDate: info.primary_info?.published?.text || 'Unknown date',
+            views: info.basic_info.view_count?.toString() || '0',
+            duration: info.basic_info.duration ? formatTime(info.basic_info.duration) : 'Unknown duration',
         };
 
-        const captions = info.player_response.captions?.playerCaptionsTracklistRenderer?.captionTracks?.find(
-            (track) => track.languageCode === 'en'
-        );
+        // Format description for HTML
+        const htmlDescription = metadata.description.replace(/\n/g, '<br>');
 
-        let captionsText = 'No captions available in English.';
-        if (captions) {
-            const captionsResponse = await fetch(captions.baseUrl);
-            const xmlText = await captionsResponse.text();
+        // Get transcript
+        let captionsText = 'No captions available.';
+        try {
+            const transcriptInfo = await info.getTranscript();
             
-            // Parse the XML using xml2js
-            const parser = new xml2js.Parser();
-            const result = await parser.parseStringPromise(xmlText);
-            
-            if (result.transcript && result.transcript.text) {
-                captionsText = result.transcript.text
-                    .map(text => {
-                        const start = parseFloat(text.$.start || 0).toFixed(1);
-                        // Normalize whitespace: trim and collapse multiple spaces/newlines
-                        const cleanText = (text._ || '').replace(/\s+/g, ' ').trim();
-                        return `(${start}s) ${cleanText}`;
+            if (transcriptInfo && transcriptInfo.transcript?.content?.body?.initial_segments) {
+                const segments = transcriptInfo.transcript.content.body.initial_segments;
+                
+                captionsText = segments
+                    .map((segment: any) => {
+                        const startTime = segment.start_ms ? (segment.start_ms / 1000).toFixed(1) : '0.0';
+                        const text = segment.snippet?.text || '';
+                        return `(${startTime}s) ${text}`;
                     })
-                    .filter(line => line.length > 0)
+                    .filter((line: string) => line.length > 0)
                     .join('\n');
             }
+        } catch (transcriptError) {
+            console.error('Failed to fetch transcript:', transcriptError);
+            captionsText = 'No captions available or captions are disabled for this video.';
         }
 
         if (format === 'markdown') {
@@ -587,11 +596,11 @@ app.get('/getMetadataAndCaptions', async (req, res) => {
             res.send(`# ${metadata.title}
 
 **Description:**  
-${metadata.description.replace(/<br>/g, '\n')}
+${metadata.description}
 
 **Author:** ${metadata.author}  
 **Upload Date:** ${metadata.uploadDate}  
-**Views:** ${metadata.views}
+**Views:** ${metadata.views}  
 **Duration:** ${metadata.duration}
 
 ---
@@ -649,7 +658,7 @@ ${captionsText}`);
     
     <div class="metadata">
         <h2>Description:</h2>
-        <div class="description">${metadata.description}</div>
+        <div class="description">${htmlDescription}</div>
         
         <p><strong>Author:</strong> ${metadata.author}</p>
         <p><strong>Upload Date:</strong> ${metadata.uploadDate}</p>
@@ -667,8 +676,11 @@ ${captionsText}`);
             res.json({ metadata, captions: captionsText });
         }
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Failed to fetch video data' });
+        console.error('Error fetching video data:', error);
+        res.status(500).json({ 
+            error: 'Failed to fetch video data',
+            details: error instanceof Error ? error.message : 'Unknown error'
+        });
     }
 });
 

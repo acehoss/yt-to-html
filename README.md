@@ -49,9 +49,19 @@ You would, of course, need to deploy this service to a server that can be access
    npm install
    ```
 
-3. Start the server:
+3. Build the TypeScript code:
    ```bash
-   node index.js
+   npm run build
+   ```
+
+4. Start the server:
+   ```bash
+   npm start
+   ```
+
+   For development with hot reload:
+   ```bash
+   npm run dev
    ```
 
 The service will be available at `http://localhost:3001`
@@ -100,11 +110,93 @@ location /yt/ {
 ## Development
 
 The project uses:
+- TypeScript for type safety
 - Express.js for the web server
-- @distube/ytdl-core for YouTube interaction
-- xml2js for caption parsing
+- YouTube.js (youtubei.js) for YouTube interaction
+- Built-in transcript support (no XML parsing needed)
 
-To modify the theme, edit the CSS variables in `index.js`.
+### Available Scripts
+
+- `npm run dev` - Start development server with hot reload
+- `npm run build` - Build TypeScript to JavaScript
+- `npm start` - Run production server
+- `npm run typecheck` - Run TypeScript type checking
+
+To modify the theme, edit the CSS variables in `src/index.ts`.
+
+## Running as a System Service
+
+To run this application as a system service on Linux, you can use systemd. Here's a sample service unit file:
+
+### `/etc/systemd/system/yt-get-ts.service`
+
+```ini
+[Unit]
+Description=YouTube Metadata and Captions Extractor
+After=network.target
+
+[Service]
+Type=simple
+User=your-username
+WorkingDirectory=/path/to/yt-get-ts
+ExecStart=/usr/bin/node /path/to/yt-get-ts/dist/index.js
+Restart=always
+RestartSec=10
+
+# Environment options
+Environment=NODE_ENV=production
+Environment=PORT=3001
+
+# Security options
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### Setup Instructions
+
+1. Build the project:
+   ```bash
+   npm run build
+   ```
+
+2. Copy the service file:
+   ```bash
+   sudo cp yt-get-ts.service /etc/systemd/system/
+   ```
+
+3. Edit the service file to update:
+   - `User=your-username` - Replace with your actual username
+   - `WorkingDirectory=/path/to/yt-get-ts` - Replace with your actual project path
+   - `ExecStart=/usr/bin/node /path/to/yt-get-ts/dist/index.js` - Update the paths
+
+4. Enable and start the service:
+   ```bash
+   sudo systemctl daemon-reload
+   sudo systemctl enable yt-get-ts
+   sudo systemctl start yt-get-ts
+   ```
+
+5. Check service status:
+   ```bash
+   sudo systemctl status yt-get-ts
+   sudo journalctl -u yt-get-ts -f  # View logs
+   ```
+
+### Managing the Service
+
+```bash
+# Stop the service
+sudo systemctl stop yt-get-ts
+
+# Restart the service
+sudo systemctl restart yt-get-ts
+
+# Disable the service
+sudo systemctl disable yt-get-ts
+```
 
 ## License
 
